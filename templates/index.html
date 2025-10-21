@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NutriScanAI Prototype</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+  <header>
+    <h1>NutriScanAI</h1>
+    <p>Personalized Food Label Analyzer</p>
+  </header>
+
+  <main>
+    <section id="auth-section">
+      <button id="googleLoginBtn">Sign in with Google</button>
+      <div id="user-info"></div>
+    </section>
+
+    <section id="scan-section">
+      <h2>Scan Food Label</h2>
+      <input type="file" id="fileInput" accept="image/*">
+      <button id="uploadBtn">Upload & Analyze</button>
+      <div id="loader" style="display:none;">Analyzing...</div>
+    </section>
+
+    <section id="result-section" style="display:none;">
+      <h3>Quick Verdict</h3>
+      <p id="quickVerdict"></p>
+
+      <button id="viewReportBtn">View Detailed Report</button>
+      <div id="detailedReport" style="display:none;"></div>
+    </section>
+
+    <section id="history-section">
+      <h2>Scan History</h2>
+      <ul id="historyList"></ul>
+    </section>
+
+    <section id="chatbot-section">
+      <h2>Ask NutriBot</h2>
+      <div id="chatWindow"></div>
+      <input type="text" id="chatInput" placeholder="Ask about your food..." />
+      <button id="sendMsgBtn">Send</button>
+    </section>
+  </main>
+
+  <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+</body>
+</html>
