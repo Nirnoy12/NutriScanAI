@@ -1,58 +1,572 @@
-body {
-  font-family: Arial, sans-serif;
+/* --- Basic Setup & Variables --- */
+:root {
+  --primary-color: #007bff; /* Example: Blue */
+  --light-gray: #f4f4f4;
+  --dark-text: #333;
+  --header-height: 60px;
+  --nav-height: 65px;
+  --scanner-border-color: #fff; /* White for scanner corners */
+  --overlay-bg: rgba(0, 0, 0, 0.6); /* Darker, slightly transparent overlay */
+}
+
+* {
   margin: 0;
-  background: #f8f9fb;
-  color: #333;
+  padding: 0;
+  box-sizing: border-box;
 }
 
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background-color: var(--light-gray);
+  color: var(--dark-text);
+  padding-top: var(--header-height);
+  padding-bottom: var(--nav-height);
+  display: flex; /* Use flex to push main content to fill space */
+  flex-direction: column;
+  min-height: 100vh; /* Ensure body takes full viewport height */
+}
+
+/* --- Fixed Header --- */
 header {
-  background: #4caf50;
-  color: #fff;
-  text-align: center;
-  padding: 20px 0;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: var(--header-height);
+  background-color: #ffffff;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 1rem;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  z-index: 100;
 }
 
+header h1 {
+  font-size: 1.5rem;
+  color: var(--primary-color);
+}
+
+/* Auth section in header (Welcome/Logout) */
+#auth-section {
+    display: flex;
+    align-items: center;
+    gap: 1rem; /* Add space between welcome and logout */
+}
+
+#auth-section button {
+  background: none;
+  border: none;
+  font-size: 1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--dark-text);
+}
+#auth-section button i {
+  color: var(--primary-color);
+}
+
+/* --- Page Switching System --- */
 main {
-  max-width: 800px;
-  margin: 20px auto;
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-  padding: 20px;
+  flex-grow: 1;
+  width: 100%;
+  max-width: 600px; 
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
 }
 
-section {
-  margin-bottom: 30px;
+.page {
+  display: none; 
+  padding: 1rem;
+  flex-grow: 1; 
+  flex-direction: column;
 }
 
-h2, h3 {
-  color: #2f4858;
+.page.active {
+  display: flex; 
+  animation: fadeIn 0.3s ease-in-out;
 }
 
-button {
-  background-color: #4caf50;
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* --- Scan Page Styling --- */
+#page-scan {
+  justify-content: center;
+  align-items: center;
+}
+
+#camera-container {
+  position: relative;
+  width: 100%;
+  max-width: 500px;
+  padding-bottom: 205%; /* This is your custom tall aspect ratio */
+  height: 0; 
+  margin: 0 auto;
+  overflow: hidden;
+  border-radius: 8px;
+  background-color: #000; 
+  box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+}
+
+#camera-feed {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover; 
+  display: block;
+}
+
+/* Fallback label styling */
+#file-fallback-label {
+  display: none; 
+  text-align: center;
+  padding: 2rem;
+  font-size: 1.1rem;
+  background: #eee;
+  border-radius: 8px;
+  cursor: pointer;
+  margin-top: 1rem;
+  color: #555;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+/* Scanner Overlay Container (NOW FULLY TRANSPARENT) */
+#scanner-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none; 
+  background: transparent;
+  box-shadow: none; 
+}
+
+/* --- REMOVED scanner-overlay::before and ::after rules --- */
+/* (The black bars at the top and bottom are now gone) */
+
+/* Scanner Corners */
+.scanner-corner {
+  position: absolute;
+  width: 30px;
+  height: 30px;
+  border: 5px solid var(--scanner-border-color);
+  z-index: 1; 
+}
+
+#corner-tl {
+  top: 20px;
+  left: 20px;
+  border-right: none;
+  border-bottom: none;
+}
+
+#corner-tr {
+  top: 20px;
+  right: 20px;
+  border-left: none;
+  border-bottom: none;
+}
+
+#corner-bl {
+  bottom: 20px;
+  left: 20px;
+  border-right: none;
+  border-top: none;
+}
+
+#corner-br {
+  bottom: 20px;
+  right: 20px;
+  border-left: none;
+  border-top: none;
+}
+
+/* Loader Styling */
+#loader {
+  position: absolute; 
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  padding: 1rem 2rem;
+  border-radius: 5px;
+  display: none; 
+  z-index: 200; 
+  font-size: 1.2rem;
+  animation: pulse 1.5s infinite ease-in-out;
+}
+
+@keyframes pulse {
+  0% { opacity: 0.8; }
+  50% { opacity: 1; }
+  100% { opacity: 0.8; }
+}
+
+
+/* --- Result Section --- */
+#result-section {
+  background-color: #fff;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-top: 1rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  text-align: left; 
+}
+
+/* --- Result Buttons (CLEANED UP) --- */
+.result-action-btn {
+    background-color: #eee; /* Default: non-primary grey */
+    color: #333;
+    border: none;
+    padding: 0.6rem 1rem;
+    font-size: 0.9rem;
+    border-radius: 20px;
+    cursor: pointer;
+    margin: 0.5rem 0.25rem;
+    transition: background-color 0.2s;
+}
+
+.result-action-btn:hover {
+    background-color: #ddd; /* Default hover */
+}
+
+/* This makes the "Scan Again" button stand out */
+.result-action-btn.primary {
+    background-color: var(--primary-color);
+    color: white;
+}
+
+.result-action-btn.primary:hover {
+    background-color: #0056b3; /* Primary hover */
+}
+
+
+/* --- History Section (UPDATED) --- */
+#history-section h2 {
+    margin-bottom: 1rem;
+}
+
+#historyList {
+    list-style-type: none;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem; 
+}
+
+.history-item {
+    display: flex;
+    align-items: stretch; /* MODIFIED: Makes all columns full height */
+    background-color: #fff;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    overflow: hidden; 
+    /* cursor: pointer; (Removed, as buttons are the target) */
+    transition: transform 0.2s ease;
+}
+
+/* We only apply hover zoom if it's not on the buttons */
+.history-item:hover {
+    /* transform: scale(1.02); (This can be jumpy, optional) */
+}
+
+.history-item img {
+    width: 80px;
+    height: 80px;
+    object-fit: cover;
+    border-right: 1px solid var(--light-gray);
+    flex-shrink: 0; /* ADDED: Prevents image from shrinking */
+}
+
+.history-item .history-info {
+    padding: 0.75rem 1rem;
+    flex-grow: 1; /* MODIFIED: Takes up middle space */
+    display: flex; /* MODIFIED: For vertical centering */
+    flex-direction: column; /* MODIFIED */
+    justify-content: center; /* MODIFIED */
+}
+
+.history-item .history-info strong {
+    display: block;
+    font-size: 1rem;
+    color: var(--dark-text);
+}
+
+.history-item .history-info p {
+    font-size: 0.85rem;
+    color: #777;
+    margin: 0;
+    margin-top: 4px;
+}
+
+/* --- NEW: History Item Buttons --- */
+.history-item-actions {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-around;
+    border-left: 1px solid var(--light-gray);
+    flex-shrink: 0; /* Prevents buttons from shrinking */
+}
+
+.history-item-actions button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #777;
+    font-size: 1.1rem;
+    padding: 0.5rem 0.8rem;
+    height: 100%;
+    flex-grow: 1;
+    transition: background-color 0.2s, color 0.2s;
+}
+
+.history-item-actions button:hover {
+    background-color: var(--light-gray);
+    color: var(--primary-color);
+}
+
+.history-item-actions .history-chat-btn {
+    /* Adds a line between the two buttons */
+    border-bottom: 1px solid var(--light-gray);
+}
+/* --- END OF NEW HISTORY STYLES --- */
+
+
+/* For the 'Loading' and 'No history' messages */
+.loading-msg {
+    text-align: center;
+    color: #777;
+    padding: 2rem;
+    font-style: italic;
+}
+
+/* --- Chatbot Section --- */
+#chatbot-section {
+  display: flex;
+  flex-direction: column;
+  height: 100%; 
+}
+#chatWindow {
+  flex-grow: 1;
+  background-color: #fff;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+  overflow-y: auto;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+#chatWindow p {
+  padding: 0.5rem 0.8rem;
+  border-radius: 15px;
+  max-width: 80%;
+}
+#chatWindow p:nth-child(odd) { /* User messages */
+  background-color: var(--primary-color);
+  color: white;
+  align-self: flex-end;
+}
+#chatWindow p:nth-child(even) { /* Bot replies */
+  background-color: var(--light-gray);
+  color: var(--dark-text);
+  align-self: flex-start;
+}
+.chat-input-area {
+  display: flex;
+  gap: 0.5rem;
+}
+#chatInput {
+  flex-grow: 1;
+  padding: 0.75rem;
+  border: 1px solid #ccc;
+  border-radius: 20px;
+  font-size: 1rem;
+}
+#sendMsgBtn {
+  background-color: var(--primary-color);
   color: white;
   border: none;
-  padding: 10px 16px;
-  border-radius: 6px;
+  border-radius: 50%;
+  width: 45px;
+  height: 45px;
+  font-size: 1.2rem;
   cursor: pointer;
-  margin-top: 10px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
-button:hover {
-  background-color: #45a049;
-}
-
-#loader {
-  color: #777;
-}
-
-#detailedReport table {
+/* --- Fixed Bottom Navigation --- */
+#bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
   width: 100%;
-  border-collapse: collapse;
+  height: var(--nav-height);
+  background-color: #ffffff;
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  box-shadow: 0 -2px 5px rgba(0, 0, 0, 0.1);
+  z-index: 100;
 }
 
-#detailedReport th, #detailedReport td {
-  border: 1px solid #ddd;
-  padding: 8px;
+.nav-btn {
+  background: none;
+  border: none;
+  color: #777;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-size: 0.75rem;
+  cursor: pointer;
+  flex: 1;
+  padding: 0.5rem 0;
+}
+
+.nav-btn i {
+  font-size: 1.5rem;
+  margin-bottom: 4px;
+}
+
+.nav-btn.active {
+  color: var(--primary-color);
+}
+
+/* --- Central Scan Button --- */
+#captureBtn {
+  background-color: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 60px;
+  height: 60px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 1.75rem;
+  cursor: pointer;
+  transform: translateY(-15px);
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.2);
+  border: 4px solid #fff;
+  flex-shrink: 0; 
+}
+
+/* =========================================
+--- NEW Auth Page Styles --- 
+=========================================
+*/
+
+.auth-page {
+  background-color: var(--light-gray);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  padding: 1rem;
+}
+
+.auth-container {
+  background-color: #fff;
+  padding: 2rem;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  width: 100%;
+  max-width: 400px;
+  text-align: center;
+}
+
+.auth-container h1 {
+  color: var(--primary-color);
+  margin-bottom: 0.5rem;
+}
+
+.auth-container p {
+  margin-bottom: 1.5rem;
+  color: #555;
+}
+
+.form-group {
+  margin-bottom: 1rem;
+  text-align: left;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 1rem;
+}
+
+.auth-button {
+  width: 100%;
+  padding: 0.85rem;
+  border: none;
+  border-radius: 4px;
+  background-color: var(--primary-color);
+  color: white;
+  font-size: 1.1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.auth-button:hover {
+  background-color: #0056b3;
+}
+
+.auth-switch {
+  margin-top: 1.5rem;
+  font-size: 0.9rem;
+}
+
+.flash-.error {
+  background-color: #ffebee;
+  color: #c62828;
+  padding: 0.75rem;
+  border-radius: 4px;
+  margin-bottom: 1rem;
+}
+
+
+/* --- Styles for new Header in index.html --- */
+#welcome-user {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #333;
+}
+#logoutBtn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: none;
+  border: none;
+  font-size: 1rem;
+  color: var(--primary-color);
+  cursor: pointer;
+  text-decoration: none;
+  font-weight: 600;
+}
+#logoutBtn:hover {
+  text-decoration: underline;
 }

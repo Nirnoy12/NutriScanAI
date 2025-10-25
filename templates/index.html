@@ -3,48 +3,98 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>NutriScanAI Prototype</title>
+  <title>NutriScanAI</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 </head>
 <body>
+
   <header>
     <h1>NutriScanAI</h1>
-    <p>Personalized Food Label Analyzer</p>
+    <div id="auth-section">
+        <a href="/logout" id="logoutBtn">
+            <i class="fa-solid fa-sign-out-alt"></i>
+            <span>Logout</span>
+        </a>
+    </div>
   </header>
 
   <main>
-    <section id="auth-section">
-      <button id="googleLoginBtn">Sign in with Google</button>
-      <div id="user-info"></div>
-    </section>
+    
+    <div id="page-scan" class="page active">
+      <section id="camera-container">
+        <video id="camera-feed" autoplay playsinline></video>
+        
+        <div id="scanner-overlay">
+          <div class="scanner-corner" id="corner-tl"></div>
+          <div class="scanner-corner" id="corner-tr"></div>
+          <div class="scanner-corner" id="corner-bl"></div>
+          <div class="scanner-corner" id="corner-br"></div>
+        </div>
 
-    <section id="scan-section">
-      <h2>Scan Food Label</h2>
-      <input type="file" id="fileInput" accept="image/*">
-      <button id="uploadBtn">Upload & Analyze</button>
-      <div id="loader" style="display:none;">Analyzing...</div>
-    </section>
+        <canvas id="capture-canvas" style="display:none;"></canvas>
 
-    <section id="result-section" style="display:none;">
-      <h3>Quick Verdict</h3>
-      <p id="quickVerdict"></p>
+        <input type="file" id="fileInput" accept="image/*" style="display:none;">
+        
+        <label for="fileInput" id="file-fallback-label" style="display:none;">
+          Camera error. Tap to upload a file instead.
+        </label>
+        
+        <div id="loader" style="display:none;">Analyzing...</div>
+      </section>
 
-      <button id="viewReportBtn">View Detailed Report</button>
-      <div id="detailedReport" style="display:none;"></div>
-    </section>
+      <section id="result-section" style="display:none;">
+    <h3>Quick Verdict</h3>
+    <p id="quickVerdict"></p>
+    
+    <button id="scanAgainBtn" class="result-action-btn primary">
+        <i class="fa-solid fa-camera"></i> Scan New Item
+    </button>
+    
+    <button id="viewReportBtn" class="result-action-btn">
+        <i class="fa-solid fa-file-alt"></i> View Report
+    </button>
+    
+    <div id="detailedReport" style="display:none;"></div>
+</section>
+    </div>
 
-    <section id="history-section">
-      <h2>Scan History</h2>
-      <ul id="historyList"></ul>
-    </section>
+    <div id="page-history" class="page">
+      <section id="history-section">
+        <h2>Scan History</h2>
+        <ul id="historyList"></ul>
+      </section>
+    </div>
 
-    <section id="chatbot-section">
-      <h2>Ask NutriBot</h2>
-      <div id="chatWindow"></div>
-      <input type="text" id="chatInput" placeholder="Ask about your food..." />
-      <button id="sendMsgBtn">Send</button>
-    </section>
+    <div id="page-chatbot" class="page">
+      <section id="chatbot-section">
+        <h2>Ask NutriBot</h2>
+        <h3>Personalized suggestion based on your scanned history</h3>
+        <div id="chatWindow"></div>
+        <div class="chat-input-area">
+          <input type="text" id="chatInput" placeholder="Ask about your food..." />
+          <button id="sendMsgBtn"><i class="fa-solid fa-paper-plane"></i></button>
+        </div>
+      </section>
+    </div>
+
   </main>
+
+  <nav id="bottom-nav">
+    <button class="nav-btn" data-page="page-history">
+      <i class="fa-solid fa-list-ul"></i>
+      <span>History</span>
+    </button>
+    
+    <button id="captureBtn" class="nav-btn-scan">
+      <i class="fa-solid fa-camera"></i>
+    </button>
+    
+    <button class="nav-btn" data-page="page-chatbot">
+      <i class="fa-solid fa-robot"></i>
+      <span>Chat</span>
+    </button>
+  </nav>
 
   <script src="{{ url_for('static', filename='js/script.js') }}"></script>
 </body>
