@@ -20,8 +20,29 @@
   </header>
 
   <main>
+    <div id="global-loader" style="display: none;">
+      <div class="spinner"></div>
+    </div>
+    <div id="global-error" style="display: none;">
+      <p>Error message here</p>
+      <button id="close-error-btn">&times;</button>
+    </div>
     
     <div id="page-scan" class="page active">
+      <section id="scan-type-selection">
+        <h3>Choose Scan Type</h3>
+        <div class="scan-type-options">
+          <label class="scan-type-option">
+            <input type="radio" name="scan_type" value="label" checked>
+            <span>📄 Read Label</span>
+          </label>
+          <label class="scan-type-option">
+            <input type="radio" name="scan_type" value="food">
+            <span>🍎 Identify Food</span>
+          </label>
+        </div>
+      </section>
+      
       <section id="camera-container">
         <video id="camera-feed" autoplay playsinline></video>
         

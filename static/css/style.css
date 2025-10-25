@@ -105,13 +105,67 @@ main {
   position: relative;
   width: 100%;
   max-width: 500px;
-  padding-bottom: 205%; /* This is your custom tall aspect ratio */
+  padding-bottom: 75%; /* Better aspect ratio for mobile */
   height: 0; 
   margin: 0 auto;
   overflow: hidden;
   border-radius: 8px;
   background-color: #000; 
   box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+}
+
+/* Mobile-specific camera adjustments */
+@media (max-width: 768px) {
+  #camera-container {
+    padding-bottom: 100%; /* Square aspect ratio on mobile */
+    max-width: 100%;
+    margin: 0 1rem;
+  }
+  
+  .scan-type-options {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .scan-type-option {
+    padding: 1rem;
+    text-align: center;
+    min-height: 60px; /* Better touch target */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  .scan-type-option span {
+    font-size: 1rem;
+  }
+  
+  /* Better touch targets for mobile */
+  .nav-btn {
+    padding: 0.75rem 0;
+    min-height: 50px;
+  }
+  
+  .result-action-btn {
+    padding: 0.8rem 1.2rem;
+    font-size: 1rem;
+    min-height: 44px; /* iOS recommended touch target */
+  }
+  
+  #captureBtn {
+    width: 70px;
+    height: 70px;
+    font-size: 2rem;
+  }
+  
+  /* Better error message positioning on mobile */
+  #global-error {
+    top: 70px;
+    left: 1rem;
+    right: 1rem;
+    width: auto;
+    transform: none;
+  }
 }
 
 #camera-feed {
@@ -569,4 +623,138 @@ main {
 }
 #logoutBtn:hover {
   text-decoration: underline;
+}
+
+/* =========================================
+--- NEW Loader & Error UI Styles --- 
+=========================================
+*/
+
+#global-loader {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+}
+
+.spinner {
+    width: 50px;
+    height: 50px;
+    border: 5px solid #f3f3f3;
+    border-top: 5px solid var(--primary-color);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+#global-error {
+    position: fixed;
+    top: 60px; /* Below header */
+    left: 50%;
+    transform: translateX(-50%);
+    width: 90%;
+    max-width: 500px;
+    background-color: #ffebee;
+    color: #c62828;
+    padding: 1rem;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    z-index: 9998;
+}
+
+/* This is for the login page */
+.static-error {
+    position: relative;
+    top: auto;
+    left: auto;
+    transform: none;
+    width: 100%;
+    margin-bottom: 1rem;
+}
+
+#global-error p {
+    margin: 0;
+}
+
+#close-error-btn {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    color: #c62828;
+    cursor: pointer;
+}
+
+/* =========================================
+--- Scan Type Selection Styles --- 
+=========================================
+*/
+
+#scan-type-selection {
+    background-color: #fff;
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+#scan-type-selection h3 {
+    margin-bottom: 1rem;
+    color: var(--dark-text);
+    text-align: center;
+}
+
+.scan-type-options {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+}
+
+.scan-type-option {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    cursor: pointer;
+    padding: 0.75rem;
+    border: 2px solid #eee;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+    background-color: #f9f9f9;
+}
+
+.scan-type-option:hover {
+    border-color: var(--primary-color);
+    background-color: #f0f8ff;
+}
+
+.scan-type-option input[type="radio"] {
+    display: none;
+}
+
+.scan-type-option input[type="radio"]:checked + span {
+    color: var(--primary-color);
+    font-weight: 600;
+}
+
+.scan-type-option:has(input[type="radio"]:checked) {
+    border-color: var(--primary-color);
+    background-color: #e3f2fd;
+}
+
+.scan-type-option span {
+    font-size: 0.9rem;
+    text-align: center;
+    margin-top: 0.5rem;
 }
