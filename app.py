@@ -6,8 +6,12 @@ from flask_login import LoginManager, UserMixin, login_user, logout_user, login_
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from PIL import Image
+from paddleocr import PaddleOCR
 from flask_sqlalchemy import SQLAlchemy
-from transformers import TrOCRProcessor, VisionEncoderDecoderModel, AutoImageProcessor, AutoModelForImageClassification, AutoTokenizer, AutoModelForCausalLM
+from transformers import (
+    AutoImageProcessor, AutoModelForImageClassification, 
+    AutoTokenizer, AutoModelForCausalLM
+)
 from huggingface_hub import InferenceClient
 from openai import OpenAI
 from config import Config
@@ -31,14 +35,23 @@ login_manager.login_message = "You must be logged in to access this page."
 if not app.config['HF_TOKEN']:
     raise ValueError("HF_TOKEN is not set. Please add it to your .env file.")
 
-# Initialize Hugging Face Inference Client for food recognition
-FOOD_MODEL = "nateraw/food"
+# --- PaddleOCR Setup ---
 try:
-    food_client = InferenceClient(token=app.config['HF_TOKEN'])
-    logging.info("Hugging Face Inference Client for food initialized successfully.")
+    # Suppress verbose PaddleOCR logs
+    logging.getLogger('ppocr').setLevel(logging.ERROR) 
+    
+    # Replaced 'use_angle_cls' and removed invalid 'show_log'
+    ocr_model = PaddleOCR(use_textline_orientation=True, lang='en')
+    logging.info("PaddleOCR initialized successfully.")
 except Exception as e:
-    logging.error(f"Hugging Face Inference Client initialization FAILED: {repr(e)}")
-    food_client = None
+    logging.error(f"PaddleOCR initialization FAILED: {repr(e)}")
+    ocr_model = None
+
+# Define local food models
+FOOD_MODEL_LOCAL_PRIMARY = "prithivMLmods/Food-101-93M"
+FOOD_MODEL_LOCAL_FALLBACK = "nateraw/food"
+food_client = None 
+logging.info("Food recognition will use dual local models.")
 
 # Initialize OpenAI client for chat
 CHAT_MODEL = "meta-llama/Llama-3.1-8B-Instruct:novita"
@@ -72,80 +85,157 @@ class Scan(db.Model):
     filename = db.Column(db.String(200), nullable=False)
     timestamp = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(UTC))
     scan_type = db.Column(db.String(50), nullable=False)
-    quick_verdict = db.Column(db.String(300), nullable=False)
-    ocr_text = db.Column(db.Text, nullable=True)
+    quick_verdict = db.Column(db.String(1000), nullable=False) # Increased size for AI verdicts
+    ocr_text = db.Column(db.Text, nullable=True) # Will store combined OCR or food list
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
 
 # ==================================
 # --- AI HELPER FUNCTIONS ---
 # ==================================
-def extract_text(image_path):
-    """Uses local TrOCR model to read text from images."""
-    OCR_MODEL = "microsoft/trocr-small-printed"
-    try:
-        logging.debug(f"Loading OCR model: {OCR_MODEL}")
-        # Force slow tokenizer to avoid SentencePiece to Tiktoken conversion
-        ocr_processor = TrOCRProcessor.from_pretrained(OCR_MODEL, token=app.config['HF_TOKEN'], use_fast=False)
-        ocr_model = VisionEncoderDecoderModel.from_pretrained(OCR_MODEL, token=app.config['HF_TOKEN'])
-        logging.debug(f"Processing image with OCR model: {image_path}")
-        image = Image.open(image_path).convert("RGB")
-        pixel_values = ocr_processor(image, return_tensors="pt").pixel_values
-        generated_ids = ocr_model.generate(pixel_values)
-        text = ocr_processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
-        if text and text.strip():
-            logging.debug(f"OCR extracted text: {text}")
-            return text.strip()
-        else:
-            logging.warning("OCR model returned empty text.")
-            return "OCR model returned empty text. Image may be unclear."
-    except Exception as e:
-        logging.error(f"Local OCR Error: {repr(e)}")
-        return f"Error: Could not read text from image. (Reason: {repr(e)})"
 
-def recognize_food(image_path):
-    """Uses Hugging Face Inference API for food recognition with local fallback."""
-    # Try Inference API first
-    if food_client:
-        try:
-            logging.debug(f"Trying Inference API with food model: {FOOD_MODEL}")
-            results = food_client.image_classification(image_path, model=FOOD_MODEL)
-            if results and len(results) > 0:
-                best_guess = results[0]
-                food_name = best_guess['label'].replace('_', ' ').title()
-                confidence = best_guess['score']
-                quick_verdict = f"Food: {food_name} ({confidence:.1%})"
-                report_data = [{"nutrient": item['label'].replace('_', ' ').title(), "impact": f"{item['score']:.1%}"} for item in results[:5]]
-                logging.debug(f"Food recognition successful: {quick_verdict}")
-                return quick_verdict, report_data
-            else:
-                logging.warning("Food API returned empty results.")
-                return "Could not identify food in this image.", []
-        except Exception as e:
-            logging.error(f"HF Food API Error: {repr(e)}")
-    
-    # Fallback to local model
+def extract_text(image_path):
+    """Uses PaddleOCR to read text from an image."""
+    if not ocr_model:
+        logging.error("PaddleOCR model is not available.")
+        return "Error: OCR model is not initialized."
     try:
-        logging.debug(f"Falling back to local food model: {FOOD_MODEL}")
-        food_processor = AutoImageProcessor.from_pretrained(FOOD_MODEL, token=app.config['HF_TOKEN'])
-        food_model = AutoModelForImageClassification.from_pretrained(FOOD_MODEL, token=app.config['HF_TOKEN'])
+        logging.debug(f"Processing image with PaddleOCR: {image_path}")
+        
+        # *** FIX: Changed from .ocr(cls=True) to .predict() ***
+        result = ocr_model.predict(image_path)
+        
+        if not result or not result[0]:
+            logging.warning("PaddleOCR returned no text.")
+            return "OCR returned no text. Image may be unclear."
+
+        lines = []
+        for res_line in result[0]:
+            # res_line format is [[box], (text, confidence)]
+            text = res_line[1][0]
+            lines.append(text)
+        
+        full_text = "\n".join(lines)
+        logging.debug(f"PaddleOCR extracted text: {full_text[:100]}...")
+        return full_text.strip()
+        
+    except Exception as e:
+        logging.error(f"PaddleOCR Error: {repr(e)}")
+        return f"Error: PaddleOCR failed. (Reason: {repr(e)})"
+
+
+def _recognize_food_local(image_path, model_name):
+    """
+    Helper function to run a local food recognition model.
+    Returns (list_of_labels, None) or (None, error_string)
+    """
+    try:
+        logging.debug(f"Loading local food model: {model_name}")
+        
+        processor = AutoImageProcessor.from_pretrained(model_name, token=app.config['HF_TOKEN'])
+        model = AutoModelForImageClassification.from_pretrained(model_name, token=app.config['HF_TOKEN'])
+        
         image = Image.open(image_path).convert("RGB")
-        inputs = food_processor(image, return_tensors="pt")
-        outputs = food_model(**inputs)
+        inputs = processor(image, return_tensors="pt")
+        outputs = model(**inputs)
         logits = outputs.logits
         probs = logits.softmax(dim=-1)
-        top_result = probs[0].argmax()
-        food_name = food_model.config.id2label[top_result.item()].replace('_', ' ').title()
-        confidence = probs[0][top_result].item()
-        quick_verdict = f"Food: {food_name} ({confidence:.1%})"
-        report_data = [
-            {"nutrient": food_model.config.id2label[i].replace('_', ' ').title(), "impact": f"{probs[0][i].item():.1%}"}
-            for i in probs[0].topk(5).indices
-        ]
-        logging.debug(f"Local food recognition successful: {quick_verdict}")
-        return quick_verdict, report_data
+        
+        top_5_indices = probs[0].topk(5).indices
+        top_5_labels = [model.config.id2label[i.item()].replace('_', ' ').title() for i in top_5_indices]
+        
+        logging.debug(f"Local food recognition successful ({model_name}): {top_5_labels}")
+        return top_5_labels, None # Return list of labels, no error
     except Exception as e:
-        logging.error(f"Local Food Model Error: {repr(e)}")
-        return f"Error: Could not identify food. (Reason: {repr(e)})", []
+        logging.error(f"Local Food Model Error ({model_name}): {repr(e)}")
+        return None, f"Error: Could not identify food (Local). (Reason: {repr(e)})"
+
+
+def recognize_food(image_path):
+    """
+    Uses two local food models to find the "best pick" identification.
+    Returns a clean text string (e.g., "Hamburger") and an error string (if any).
+    """
+    logging.debug(f"Starting dual food recognition for: {image_path}")
+
+    # 1. Run primary local model (prithivMLmods)
+    labels_1, err_1 = _recognize_food_local(
+        image_path, 
+        FOOD_MODEL_LOCAL_PRIMARY 
+    )
+    
+    # 2. Run secondary local model (nateraw)
+    labels_2, err_2 = _recognize_food_local(
+        image_path, 
+        FOOD_MODEL_LOCAL_FALLBACK
+    )
+
+    # 3. Check for total failure
+    if err_1 and err_2:
+        logging.error(f"All food models failed. Model 1: {err_1}, Model 2: {err_2}")
+        return None, f"All food models failed.\nModel 1: {err_1}\nModel 2: {err_2}"
+
+    # 4. "Best Pick" Logic
+    best_pick_text = ""
+    if labels_1 and labels_2:
+        # Find common items (intersection)
+        common_items = list(set(labels_1) & set(labels_2))
+        if common_items:
+            logging.debug(f"Found common items: {common_items}")
+            best_pick_text = ", ".join(common_items)
+        else:
+            # No common items, trust the primary model's top guess
+            logging.debug(f"No common items. Trusting primary model: {labels_1[0]}")
+            best_pick_text = labels_1[0]
+    elif labels_1:
+        # Only primary model succeeded
+        logging.debug(f"Only primary model succeeded. Using: {labels_1[0]}")
+        best_pick_text = labels_1[0]
+    elif labels_2:
+        # Only secondary model succeeded
+        logging.debug(f"Only secondary model succeeded. Using: {labels_2[0]}")
+        best_pick_text = labels_2[0]
+    else:
+        # This case should be caught by step 3, but as a safeguard
+        return None, "Food models returned empty lists."
+
+    logging.debug(f"Best pick for food: {best_pick_text}")
+    return best_pick_text, None # Return clean string, no error
+
+def get_ai_nutrition_analysis(context_text, system_prompt, user_prompt):
+    """
+    Calls the chat API to get a nutritional analysis.
+    Returns (analysis_text, None) on success, or (None, error_string) on failure.
+    """
+    if not chat_client:
+        logging.error("Chat client is not initialized.")
+        return None, "Chat client is not available."
+
+    try:
+        logging.debug(f"Calling chat API with model: {CHAT_MODEL}")
+        logging.debug(f"System Prompt: {system_prompt}")
+        logging.debug(f"User Prompt: {user_prompt} | Context: {context_text[:100]}...")
+        
+        full_user_content = f"{user_prompt}\n\nHere is the text to analyze:\n{context_text}"
+
+        completion = chat_client.chat.completions.create(
+            model=CHAT_MODEL,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": full_user_content}
+            ],
+            max_tokens=350, 
+            temperature=0.5, 
+        )
+        response = completion.choices[0].message.content
+        logging.debug(f"Chat API analysis response: {response}")
+        if response and response.strip():
+            return response.strip(), None
+        else:
+            logging.warning("Chat API returned an empty analysis.")
+            return None, "AI analysis returned an empty response."
+    except Exception as e:
+        logging.error(f"Chat API analysis Error: {repr(e)}")
+        return None, f"Error during AI analysis: {repr(e)}"
 
 def chat_with_bot_local(message):
     """Uses local DistilGPT-2 model for chatbot conversation."""
@@ -288,33 +378,78 @@ def analyze_image():
         logging.error(f"Failed to save file: {repr(e)}")
         return jsonify({'error': f'Failed to save file: {repr(e)}'}), 500
 
-    ocr_text = ""
+    ocr_text_to_save = ""
+    quick_verdict = ""
     detailed_report = []
 
     try:
         if scan_type == 'label':
-            ocr_text = extract_text(filepath)
-            if "Error:" in ocr_text:
-                logging.error(f"OCR failed: {ocr_text}")
-                return jsonify({'error': ocr_text}), 400
-            quick_verdict = "Label: " + (ocr_text.split('\n')[0] if ocr_text else "No text detected")
-            detailed_report = [{"nutrient": "From OCR", "impact": "See text"}]
-            logging.debug(f"OCR result: {quick_verdict}")
+            # 1. Get OCR text from PaddleOCR
+            logging.debug("Scan type 'label': Starting PaddleOCR.")
+            ocr_text_to_save = extract_text(filepath) # This now uses Paddle
+            if "Error:" in ocr_text_to_save:
+                logging.error(f"PaddleOCR failed: {ocr_text_to_save}")
+                return jsonify({'error': ocr_text_to_save}), 400
+
+            # 2. Get AI Quick Verdict
+            verdict_sys_prompt = "You are a professional nutritionist. You have read the following nutrition label text."
+            verdict_user_prompt = "Provide a concise, one-paragraph verdict on this product's healthiness based on the text. Speak as the nutritionist."
+            verdict, err = get_ai_nutrition_analysis(ocr_text_to_save, verdict_sys_prompt, verdict_user_prompt)
+            if err:
+                logging.error(f"AI Verdict failed: {err}")
+                return jsonify({'error': f"AI analysis failed: {err}"}), 500
+            quick_verdict = verdict
+
+            # 3. Get AI Detailed Report (Long-Term)
+            report_sys_prompt = "You are a professional nutritionist."
+            report_user_prompt = "Based on the nutrition label text, what are the potential long-term health impacts (positive or negative) of consuming this item regularly? Be concise and use bullet points."
+            report, err = get_ai_nutrition_analysis(ocr_text_to_save, report_sys_prompt, report_user_prompt)
+            if err:
+                logging.error(f"AI Report failed: {err}")
+                detailed_report = [{"nutrient": "Long-Term Impact", "impact": f"Failed to generate report: {err}"}]
+            else:
+                detailed_report = [{"nutrient": "Long-Term Impact", "impact": report}]
+            
+            logging.debug(f"Label analysis complete. Verdict: {quick_verdict[:50]}...")
             
         elif scan_type == 'food':
-            quick_verdict, report_data = recognize_food(filepath)
-            if "Error:" in quick_verdict:
-                logging.error(f"Food recognition failed: {quick_verdict}")
-                return jsonify({'error': quick_verdict}), 400
-            ocr_text = quick_verdict
-            detailed_report = report_data
-            logging.debug(f"Food recognition result: {quick_verdict}")
+            # 1. Get "best pick" food recognition text
+            logging.debug("Scan type 'food': Starting dual food recognition.")
+            best_pick_text, err = recognize_food(filepath) 
+            
+            if err:
+                logging.error(f"Food recognition failed: {err}")
+                return jsonify({'error': err}), 400
+            
+            ocr_text_to_save = best_pick_text # This is the clean string, e.g., "Hamburger"
 
+            # 2. Get AI Quick Verdict
+            verdict_sys_prompt = "You are a professional nutritionist. A food item has been identified."
+            verdict_user_prompt = f"The food is: {ocr_text_to_save}. Provide a concise, one-paragraph nutritional verdict on this item. Speak as the nutritionist."
+            verdict, err = get_ai_nutrition_analysis(ocr_text_to_save, verdict_sys_prompt, verdict_user_prompt)
+            if err:
+                logging.error(f"AI Verdict failed: {err}")
+                return jsonify({'error': f"AI analysis failed: {err}"}), 500
+            quick_verdict = verdict
+            
+            # 3. Get AI Detailed Report (Long-Term)
+            report_sys_prompt = "You are a professional nutritionist."
+            report_user_prompt = f"The food is: {ocr_text_to_save}. What are the potential long-term health impacts (positive or negative) of consuming this item regularly? Be concise and use bullet points."
+            report, err = get_ai_nutrition_analysis(ocr_text_to_save, report_sys_prompt, report_user_prompt)
+            if err:
+                logging.error(f"AI Report failed: {err}")
+                detailed_report = [{"nutrient": "Long-Term Impact", "impact": f"Failed to generate report: {err}"}]
+            else:
+                detailed_report = [{"nutrient": "Long-Term Impact", "impact": report}]
+                
+            logging.debug(f"Food analysis complete. Verdict: {quick_verdict[:50]}...")
+
+        # --- Save to DB and return (This part is the same as before) ---
         new_scan = Scan(
             filename=filename,
             scan_type=scan_type,
             quick_verdict=quick_verdict,
-            ocr_text=ocr_text,
+            ocr_text=ocr_text_to_save, # Save the PaddleOCR text or "best pick" food
             user_id=current_user.id
         )
         db.session.add(new_scan)
@@ -326,7 +461,7 @@ def analyze_image():
             "filename": new_scan.filename,
             "ocr_text": new_scan.ocr_text,
             "quick_verdict": new_scan.quick_verdict,
-            "detailed_report": detailed_report,
+            "detailed_report": detailed_report, 
             "type": new_scan.scan_type
         })
     except Exception as e:
@@ -350,8 +485,8 @@ def chat_with_bot():
     
     try:
         user_scans = Scan.query.filter_by(user_id=current_user.id).order_by(Scan.timestamp.desc()).limit(10).all()
-        eaten_foods = [scan.quick_verdict for scan in user_scans]
-        system_prompt = f"You are NutriBot, a helpful AI nutrition assistant. The user's recent scans: {', '.join(eaten_foods)}. Be concise and helpful."
+        eaten_foods = [scan.quick_verdict for scan in user_scans] 
+        system_prompt = f"You are NutriBot, a helpful AI nutrition assistant. The user's recent scan history (verdicts): {', '.join(eaten_foods)}. Be concise and helpful."
         
         # Try OpenAI-compatible Inference API
         if chat_client:
