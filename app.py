@@ -525,4 +525,5 @@ if __name__ == '__main__':
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
     with app.app_context():
         db.create_all()
-    app.run(debug=True)
+    # Run Flask on all network interfaces, port 8080 (changeable)
+    app.run(host='0.0.0.0', port=8080, debug=True)
